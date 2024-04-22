@@ -1,0 +1,12 @@
+prefix=/home/vsts/work/1/state/android-build-root/opt/android
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: FluidSynth
+Description: Software SoundFont synth
+Version: 2.3.1
+Requires.private: glib-2.0 gthread-2.0 sndfile libinstpatch-1.0 oboe-1.0
+Libs: -L${libdir} -lfluidsynth
+Libs.private: -lm /usr/local/lib/android/sdk/ndk/25.1.8937393/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/i686-linux-android/24/libOpenSLES.so -pthread
+Cflags: -I${includedir}

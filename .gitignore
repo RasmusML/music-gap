@@ -2,6 +2,8 @@
 .gradle/
 build/
 
+*.sf2
+
 # Local configuration file (sdk path, etc)
 local.properties
 
