@@ -42,8 +42,7 @@ JNIEXPORT jint JNICALL
 Java_dk_rmls_musicgap_FluidSynth_loadSoundFont(JNIEnv *env, jclass /* this */, jstring path) {
     const char *soundfontPath = env->GetStringUTFChars(path, nullptr);
     jint result = (jint) fluid_synth_sfload(synth, soundfontPath, 1);
-
-    __android_log_print(ANDROID_LOG_ERROR, "TRACKERS", "%s %d", soundfontPath, result);
+    //__android_log_print(ANDROID_LOG_ERROR, "TRACKERS", "%s %d", soundfontPath, result);
     return result;
 }
 
