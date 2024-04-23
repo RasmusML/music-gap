@@ -18,7 +18,7 @@ public class IOUtil {
     static private final int MAX_BUFFER_SIZE = Integer.MAX_VALUE - 8;
     static private final int DEFAULT_BUFFER_SIZE = 8192;
 
-    static public void copyAssetToDeviceStorage(Context context, String src, String dst) {
+    static public void copyAssetToAppStorage(Context context, String src, String dst) {
         try {
             AssetManager assetManager = context.getAssets();
             InputStream input = assetManager.open(src);
