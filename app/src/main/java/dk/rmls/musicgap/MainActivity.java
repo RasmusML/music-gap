@@ -1,5 +1,9 @@
 package dk.rmls.musicgap;
 
+import static dk.rmls.musicgap.UIUtil.*;
+import static dk.rmls.musicgap.UIUtil.ButtonTheme;
+import static dk.rmls.musicgap.UIUtil.dp;
+
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.View;
@@ -11,6 +15,7 @@ import android.widget.TableRow;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.graphics.ColorUtils;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -30,17 +35,30 @@ public class MainActivity extends AppCompatActivity {
   }
 
   static public class AppState {
-    public int correctGuesses, totalGuesses;
-    public Dyad intervalToGuess;
-
-    public int lowestNote;
-    public int highestNote;
-    public int[] intervals;
-
+    public IntervalSettings intervalSettings;
+    public IntervalGameState gameState;
     public UIState uiState;
   }
 
+  static public class IntervalGameState {
+    public int correctGuesses, totalGuesses;
+    public Dyad intervalToGuess;
+  }
+
+  static public class IntervalSettings {
+    public int lowestNote;
+    public int highestNote;
+    public int[] intervals;
+  }
+
+
+  static public class UITheme {
+    public ButtonTheme intervalButton;
+  }
+
   static public class UIState {
+    public UITheme theme;
+
     public List<Button> intervalButtons;
     public String[] intervalNames;
     public IntervalButtonState[] intervalButtonStates;
@@ -50,15 +68,6 @@ public class MainActivity extends AppCompatActivity {
 
   static public interface CustomOnClickListener {
     public void onClick(View view, Object customData);
-  }
-
-  static public int getRandomInt(int fromInclusive, int toInclusive) {
-    double rand = (toInclusive - fromInclusive + 1) * Math.random() + fromInclusive;
-    return (int) rand;
-  }
-
-  static public int getRandomInt(int toInclusive) {
-    return getRandomInt(0, toInclusive);
   }
 
   static private int[] getValidIntervals(int maxInterval, int[] candidateIntervals) {
@@ -74,14 +83,14 @@ public class MainActivity extends AppCompatActivity {
       throw new IllegalStateException(error);
     }
 
-    int randomIntervalIndex = getRandomInt(validIntervals.length - 1);
+    int randomIntervalIndex = MathUtil.getRandomInt(validIntervals.length - 1);
 
     int randomInterval = validIntervals[randomIntervalIndex];
 
     int lowestNoteA = lowestNote - Math.min(0, randomInterval);
     int highestNoteA = highestNote - Math.max(0, randomInterval);
 
-    int noteA = getRandomInt(lowestNoteA, highestNoteA);
+    int noteA = MathUtil.getRandomInt(lowestNoteA, highestNoteA);
     int noteB = noteA + randomInterval;
 
     Dyad result = new Dyad();
@@ -99,18 +108,30 @@ public class MainActivity extends AppCompatActivity {
     return Math.abs(dyad.noteB - dyad.noteA);
   }
 
-  static public String getDisplayText(AppState state) {
-    int interval = getInterval(state.intervalToGuess);
-    int intervalWithSign = getIntervalWithSign(state.intervalToGuess);
-    return String.format("%s, %d-%d (%d) %d/%d",
-        state.uiState.intervalNames[interval], state.intervalToGuess.noteA, state.intervalToGuess.noteB,
-        intervalWithSign, state.correctGuesses, state.totalGuesses);
+  static private String getDisplayText(UIState uiState, IntervalGameState gameState) {
+    if (DEBUG) {
+      int interval = getInterval(gameState.intervalToGuess);
+      int intervalWithSign = getIntervalWithSign(gameState.intervalToGuess);
+
+      return String.format("%s, %d-%d (%d) %d/%d",
+          uiState.intervalNames[interval], gameState.intervalToGuess.noteA, gameState.intervalToGuess.noteB,
+          intervalWithSign, gameState.correctGuesses, gameState.totalGuesses);
+    }
+
+    float percentageCorrect = 100f;
+    if (gameState.totalGuesses > 0) {
+      percentageCorrect = gameState.correctGuesses / (float) gameState.totalGuesses * 100f;
+    }
+
+    return String.format("%d/%d (%.0f%%)", gameState.correctGuesses, gameState.totalGuesses, percentageCorrect);
   }
 
-  static public void updateDisplayText(AppState state) {
-    String intervalToGuessText = getDisplayText(state);
-    state.uiState.display.setText(intervalToGuessText);
+  static public void updateDisplayText(UIState uiState, IntervalGameState gameState) {
+    String intervalToGuessText = getDisplayText(uiState, gameState);
+    uiState.display.setText(intervalToGuessText);
   }
+
+  static public boolean DEBUG = false;
 
   private AppState state;
 
@@ -119,42 +140,66 @@ public class MainActivity extends AppCompatActivity {
     super.onCreate(savedInstanceState);
 
     CustomOnClickListener listener = (view, customData) -> {
+      UIState uiState = state.uiState;
+      IntervalGameState gameState = state.gameState;
+      IntervalSettings intervalSettings = state.intervalSettings;
+
       int guessedInterval = (int) customData;
-      int trueInterval = getInterval(state.intervalToGuess);
+      int trueInterval = getInterval(gameState.intervalToGuess);
 
       if (guessedInterval == trueInterval) {
-        state.correctGuesses += 1;
-        state.intervalToGuess = generateRandomDyad(state.lowestNote, state.highestNote, state.intervals);
+        resetIntervalButtonStates(uiState.intervalButtonStates);
 
-        clearIntervalButtonStates(state.uiState.intervalButtonStates);
+        gameState.correctGuesses += 1;
+        gameState.intervalToGuess = generateRandomDyad(
+            intervalSettings.lowestNote, intervalSettings.highestNote, intervalSettings.intervals
+        );
+
       } else {
-        state.uiState.intervalButtonStates[guessedInterval] = IntervalButtonState.guessed;
+        uiState.intervalButtonStates[guessedInterval] = IntervalButtonState.guessed;
       }
 
-      state.totalGuesses += 1;
+      gameState.totalGuesses += 1;
 
-      updateIntervalButtonStates(state.uiState.intervalButtons, state.uiState.intervalButtonStates);
-      updateDisplayText(state);
+      updateIntervalButtonsBeingClickable(uiState);
+      updateDisplayText(uiState, gameState);
 
-      playInterval(state.intervalToGuess);
+      playInterval(gameState.intervalToGuess);
     };
 
+    IntervalSettings intervalSettings = new IntervalSettings();
+    intervalSettings.lowestNote = 21;
+    intervalSettings.highestNote = 108;
+    intervalSettings.intervals = IntStream.range(-12, 13).toArray();
+
+    IntervalGameState gameState = new IntervalGameState();
+    gameState.correctGuesses = 0;
+    gameState.totalGuesses = 0;
+    gameState.intervalToGuess = generateRandomDyad(intervalSettings.lowestNote, intervalSettings.highestNote, intervalSettings.intervals);
+
     UIState uiState = createUI(listener);
+    uiState.display.setOnClickListener(v -> {
+      gameState.correctGuesses = 0;
+      gameState.totalGuesses = 0;
+
+      updateDisplayText(uiState, gameState);
+    });
 
     state = new AppState();
-    state.highestNote = 108;
-    state.lowestNote = 21;
-    state.intervals = IntStream.range(-12, 13).toArray();
-    state.intervalToGuess = generateRandomDyad(state.lowestNote, state.highestNote, state.intervals);
+    state.intervalSettings = intervalSettings;
+    state.gameState = gameState;
     state.uiState = uiState;
 
-    updateDisplayText(state);
-
-    FluidSynth.init();
+    updateDisplayText(state.uiState, state.gameState);
 
     String soundFontName = "Yamaha-Grand-Lite-v2.0.sf2";
-    IOUtil.copyAssetToAppStorage(getBaseContext(), soundFontName, soundFontName);
     Path soundFontPath = IOUtil.getAppStoragePath(getBaseContext(), soundFontName);
+
+    if (!soundFontPath.toFile().exists()) {
+      IOUtil.copyAssetToAppStorage(getBaseContext(), soundFontName, soundFontName);
+    }
+
+    FluidSynth.init();
     FluidSynth.loadSoundFont(soundFontPath.toString());
   }
 
@@ -162,7 +207,7 @@ public class MainActivity extends AppCompatActivity {
   protected void onResume() {
     super.onResume();
 
-    playInterval(state.intervalToGuess);
+    playInterval(state.gameState.intervalToGuess);
   }
 
   static private void playInterval(Dyad intervalToGuess) {
@@ -182,6 +227,17 @@ public class MainActivity extends AppCompatActivity {
 
   private UIState createUI(CustomOnClickListener buttonOnClickListener) {
     UIState result = new UIState();
+
+    ButtonTheme intervalButtonTheme = new ButtonTheme();
+    intervalButtonTheme.roundness = 8;
+    intervalButtonTheme.clickableColor = Color.GREEN;
+    intervalButtonTheme.unclickableColor = Color.GRAY;
+    intervalButtonTheme.hoverColor = ColorUtils.blendARGB(intervalButtonTheme.clickableColor, Color.BLACK, 0.3f);
+
+    UITheme theme = new UITheme();
+    theme.intervalButton = intervalButtonTheme;
+
+    result.theme = theme;
 
     setContentView(R.layout.container);
     RelativeLayout container = findViewById(R.id.container);
@@ -206,7 +262,7 @@ public class MainActivity extends AppCompatActivity {
     {
       TextView display = new TextView(this);
       display.setTextSize(32);
-      display.setBackgroundColor(Color.RED);
+      //display.setBackgroundColor(Color.RED);
       result.display = display;
 
       RelativeLayout.LayoutParams displayLayout = new RelativeLayout.LayoutParams(
@@ -219,7 +275,7 @@ public class MainActivity extends AppCompatActivity {
 
     {
       TableLayout table = new TableLayout(this);
-      table.setBackgroundColor(Color.BLUE);
+      //table.setBackgroundColor(Color.BLUE);
       RelativeLayout.LayoutParams tableLayout = new RelativeLayout.LayoutParams(
           ViewGroup.LayoutParams.MATCH_PARENT,
           ViewGroup.LayoutParams.WRAP_CONTENT
@@ -236,14 +292,14 @@ public class MainActivity extends AppCompatActivity {
 
       List<Button> buttons = new ArrayList<>();
 
+      int buttonMarginPx = dp(this, 2);
+      int buttonPaddingPx = dp(this, 24);
+
+      buttonParam.setMargins(buttonMarginPx, buttonMarginPx, buttonMarginPx, buttonMarginPx);
+
       for (int r = 0; r < intervalButtonLayout.length; r++) {
         TableRow row = new TableRow(this);
         table.addView(row);
-
-        int buttonMarginPx = UIUtil.dp(this, 0);
-        int buttonPaddingPx = UIUtil.dp(this, 24);
-
-        buttonParam.setMargins(buttonMarginPx, buttonMarginPx, buttonMarginPx, buttonMarginPx);
 
         for (int c = 0; c < intervalButtonLayout[r].length; c++) {
           final int interval = intervalButtonLayout[r][c];
@@ -252,15 +308,21 @@ public class MainActivity extends AppCompatActivity {
             emptyField.setPadding(buttonPaddingPx, buttonPaddingPx, buttonPaddingPx, buttonPaddingPx);
             row.addView(emptyField, buttonParam);
           } else {
-            Button button = new Button(this);
+            Button2 button = new Button2(this);
             button.setPadding(buttonPaddingPx, buttonPaddingPx, buttonPaddingPx, buttonPaddingPx);
-            button.setOnClickListener(v -> {
-              buttonOnClickListener.onClick(v, interval);
+            button.applyTheme(intervalButtonTheme);
+            button.setSimpleOnTouchListener(new SimpleTouchListener() {
+              @Override
+              public void onUpTouchAction() {
+                buttonOnClickListener.onClick(button, interval);
+              }
             });
-            row.addView(button, buttonParam);
+
             String text = String.format("%s", intervalNames[interval]);
             button.setText(text);
+
             buttons.add(button);
+            row.addView(button, buttonParam);
           }
         }
       }
@@ -278,7 +340,7 @@ public class MainActivity extends AppCompatActivity {
     return result;
   }
 
-  static private IntervalButtonState clearIntervalButtonState(IntervalButtonState state) {
+  static private IntervalButtonState resetIntervalButtonState(IntervalButtonState state) {
     switch (state) {
       case notGuessed:
         return IntervalButtonState.notGuessed;
@@ -292,13 +354,16 @@ public class MainActivity extends AppCompatActivity {
     }
   }
 
-  static public void clearIntervalButtonStates(IntervalButtonState[] states) {
+  static private void resetIntervalButtonStates(IntervalButtonState[] states) {
     for (int i = 0; i < states.length; i++) {
-      states[i] = clearIntervalButtonState(states[i]);
+      states[i] = resetIntervalButtonState(states[i]);
     }
   }
 
-  static public void updateIntervalButtonStates(List<Button> buttons, IntervalButtonState[] states) {
+  static private void updateIntervalButtonsBeingClickable(UIState uiState) {
+    List<Button> buttons = uiState.intervalButtons;
+    IntervalButtonState[] states = uiState.intervalButtonStates;
+
     for (int i = 0; i < states.length; i++) {
       IntervalButtonState state = states[i];
       Button button = buttons.get(i);
@@ -320,5 +385,12 @@ public class MainActivity extends AppCompatActivity {
         String error = String.format("unexpected interval button state: %s.", state);
         throw new IllegalStateException(error);
     }
+  }
+
+  @Override
+  protected void onDestroy() {
+    super.onDestroy();
+
+    FluidSynth.deinit();
   }
 }
