@@ -2,9 +2,6 @@ package dk.rmls.musicgap;
 
 import android.content.Context;
 import android.content.res.Resources;
-import android.graphics.Color;
-import android.graphics.PorterDuff;
-import android.graphics.PorterDuffColorFilter;
 import android.graphics.Rect;
 import android.graphics.drawable.GradientDrawable;
 import android.util.AttributeSet;
@@ -12,7 +9,6 @@ import android.util.TypedValue;
 import android.view.ContextThemeWrapper;
 import android.view.MotionEvent;
 import android.view.View;
-import android.widget.Button;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -20,18 +16,7 @@ import androidx.appcompat.widget.AppCompatButton;
 
 public class UIUtil {
 
-  static public class ButtonTheme {
-    public int clickableColor;
-    public int unclickableColor;
-    public int hoverColor;
-    public float roundness;
-  }
-
   static public class Button2 extends AppCompatButton {
-
-    private ClickableListener componentClickableChangeListener;
-    private SimpleTouchListener userTouchListener;
-    private ButtonTheme theme;
 
     public Button2(@NonNull Context context) {
       super(context);
@@ -48,85 +33,19 @@ public class UIUtil {
       init();
     }
 
-    public void setSimpleOnTouchListener(SimpleTouchListener l) {
-      this.userTouchListener = l;
-    }
-
     private void init() {
       setBackground(new GradientDrawable());
-
-      setOnTouchListener(new SimpleTouchListener() {
-        @Override
-        public void onDownTouchAction() {
-          if (theme != null) {
-            GradientDrawable background = (GradientDrawable) getBackground();
-            background.setColor(theme.hoverColor);
-            invalidate();
-          }
-          if (userTouchListener != null) userTouchListener.onDownTouchAction();
-        }
-
-        @Override
-        public void onUpTouchAction() {
-          if (theme != null) {
-            GradientDrawable background = (GradientDrawable) getBackground();
-            background.setColor(theme.clickableColor);
-            invalidate();
-          }
-          if (userTouchListener != null) userTouchListener.onUpTouchAction();
-        }
-
-        @Override
-        public void onCancelTouchAction() {
-          if (theme != null) {
-            GradientDrawable background = (GradientDrawable) getBackground();
-            background.setColor(theme.clickableColor);
-            invalidate();
-          }
-          if (userTouchListener != null) userTouchListener.onCancelTouchAction();
-        }
-      });
-
-      componentClickableChangeListener = new ClickableListener() {
-        @Override
-        public void onChange(boolean clickable) {
-          if (theme != null) {
-            int color = clickable ? theme.clickableColor : theme.unclickableColor;
-            GradientDrawable background = (GradientDrawable) getBackground();
-            background.setColor(color);
-            invalidate();
-          }
-        }
-      };
-    }
-
-    public void applyTheme(ButtonTheme theme) {
-      this.theme = theme;
-
-      GradientDrawable shape = (GradientDrawable) getBackground();
-      shape.setCornerRadius(theme.roundness);
-
-      int color = isClickable() ? theme.clickableColor : theme.unclickableColor;
-      shape.setColor(color);
-
-      setBackground(shape);
-      invalidate();
     }
 
     @Override
-    public void setClickable(boolean clickable) {
-      boolean stateChange = clickable != isClickable();
-
-      super.setClickable(clickable);
-
-      if (componentClickableChangeListener != null && stateChange) {
-        componentClickableChangeListener.onChange(clickable);
-      }
+    public void setBackgroundColor(int color) {
+      GradientDrawable drawable = (GradientDrawable) getBackground();
+      drawable.setColor(color);
     }
-  }
 
-  static public class ClickableListener {
-    public void onChange(boolean clickable) {
+    public void setCornerRadius(float radius) {
+      GradientDrawable drawable = (GradientDrawable) getBackground();
+      drawable.setCornerRadius(radius);
     }
   }
 

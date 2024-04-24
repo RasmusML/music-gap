@@ -1,7 +1,7 @@
 package dk.rmls.musicgap;
 
-import static dk.rmls.musicgap.UIUtil.*;
-import static dk.rmls.musicgap.UIUtil.ButtonTheme;
+import static dk.rmls.musicgap.UIUtil.Button2;
+import static dk.rmls.musicgap.UIUtil.SimpleTouchListener;
 import static dk.rmls.musicgap.UIUtil.dp;
 
 import android.graphics.Color;
@@ -9,6 +9,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.RelativeLayout;
 import android.widget.TableLayout;
 import android.widget.TableRow;
@@ -51,9 +52,16 @@ public class MainActivity extends AppCompatActivity {
     public int[] intervals;
   }
 
-
   static public class UITheme {
-    public ButtonTheme intervalButton;
+
+    static public class IntervalButtonColor {
+      public int notGuessedColor;
+      public int guessedColor;
+      public int lockedColor;
+      public int hoverColor;
+    }
+
+    public IntervalButtonColor intervalButton;
   }
 
   static public class UIState {
@@ -63,7 +71,8 @@ public class MainActivity extends AppCompatActivity {
     public String[] intervalNames;
     public IntervalButtonState[] intervalButtonStates;
 
-    public TextView display;
+    public TextView scoreDisplay;
+    public ImageView replayIcon;
   }
 
   static public interface CustomOnClickListener {
@@ -108,7 +117,7 @@ public class MainActivity extends AppCompatActivity {
     return Math.abs(dyad.noteB - dyad.noteA);
   }
 
-  static private String getDisplayText(UIState uiState, IntervalGameState gameState) {
+  static private String getScoreDisplayText(UIState uiState, IntervalGameState gameState) {
     if (DEBUG) {
       int interval = getInterval(gameState.intervalToGuess);
       int intervalWithSign = getIntervalWithSign(gameState.intervalToGuess);
@@ -126,9 +135,9 @@ public class MainActivity extends AppCompatActivity {
     return String.format("%d/%d (%.0f%%)", gameState.correctGuesses, gameState.totalGuesses, percentageCorrect);
   }
 
-  static public void updateDisplayText(UIState uiState, IntervalGameState gameState) {
-    String intervalToGuessText = getDisplayText(uiState, gameState);
-    uiState.display.setText(intervalToGuessText);
+  static public void updateScoreDisplayText(UIState uiState, IntervalGameState gameState) {
+    String intervalToGuessText = getScoreDisplayText(uiState, gameState);
+    uiState.scoreDisplay.setText(intervalToGuessText);
   }
 
   static public boolean DEBUG = false;
@@ -145,6 +154,10 @@ public class MainActivity extends AppCompatActivity {
       IntervalSettings intervalSettings = state.intervalSettings;
 
       int guessedInterval = (int) customData;
+
+      IntervalButtonState state = uiState.intervalButtonStates[guessedInterval];
+      if (!isIntervalButtonClickable(state)) return;
+
       int trueInterval = getInterval(gameState.intervalToGuess);
 
       if (guessedInterval == trueInterval) {
@@ -162,7 +175,7 @@ public class MainActivity extends AppCompatActivity {
       gameState.totalGuesses += 1;
 
       updateIntervalButtonsBeingClickable(uiState);
-      updateDisplayText(uiState, gameState);
+      updateScoreDisplayText(uiState, gameState);
 
       playInterval(gameState.intervalToGuess);
     };
@@ -170,7 +183,7 @@ public class MainActivity extends AppCompatActivity {
     IntervalSettings intervalSettings = new IntervalSettings();
     intervalSettings.lowestNote = 21;
     intervalSettings.highestNote = 108;
-    intervalSettings.intervals = IntStream.range(-12, 13).toArray();
+    intervalSettings.intervals = IntStream.rangeClosed(-12, 12).toArray();
 
     IntervalGameState gameState = new IntervalGameState();
     gameState.correctGuesses = 0;
@@ -178,19 +191,20 @@ public class MainActivity extends AppCompatActivity {
     gameState.intervalToGuess = generateRandomDyad(intervalSettings.lowestNote, intervalSettings.highestNote, intervalSettings.intervals);
 
     UIState uiState = createUI(listener);
-    uiState.display.setOnClickListener(v -> {
+    uiState.scoreDisplay.setOnClickListener(v -> {
       gameState.correctGuesses = 0;
       gameState.totalGuesses = 0;
 
-      updateDisplayText(uiState, gameState);
+      updateScoreDisplayText(uiState, gameState);
     });
+    uiState.replayIcon.setOnClickListener(v -> playInterval(gameState.intervalToGuess));
 
     state = new AppState();
     state.intervalSettings = intervalSettings;
     state.gameState = gameState;
     state.uiState = uiState;
 
-    updateDisplayText(state.uiState, state.gameState);
+    updateScoreDisplayText(state.uiState, state.gameState);
 
     String soundFontName = "Yamaha-Grand-Lite-v2.0.sf2";
     Path soundFontPath = IOUtil.getAppStoragePath(getBaseContext(), soundFontName);
@@ -204,38 +218,38 @@ public class MainActivity extends AppCompatActivity {
   }
 
   @Override
-  protected void onResume() {
-    super.onResume();
+  protected void onStart() {
+    super.onStart();
 
     playInterval(state.gameState.intervalToGuess);
   }
 
-  static private void playInterval(Dyad intervalToGuess) {
+  static private void playInterval(Dyad interval) {
     new Thread(() -> {
-      FluidSynth.noteOn(0, intervalToGuess.noteA, 127);
+      FluidSynth.noteOn(0, interval.noteA, 127);
 
       ThreadUtil.sleep(400);
 
-      FluidSynth.noteOff(0, intervalToGuess.noteA);
-      FluidSynth.noteOn(0, intervalToGuess.noteB, 127);
+      FluidSynth.noteOff(0, interval.noteA);
+      FluidSynth.noteOn(0, interval.noteB, 127);
 
       ThreadUtil.sleep(400);
 
-      FluidSynth.noteOff(0, intervalToGuess.noteB);
+      FluidSynth.noteOff(0, interval.noteB);
     }).start();
   }
 
   private UIState createUI(CustomOnClickListener buttonOnClickListener) {
     UIState result = new UIState();
 
-    ButtonTheme intervalButtonTheme = new ButtonTheme();
-    intervalButtonTheme.roundness = 8;
-    intervalButtonTheme.clickableColor = Color.GREEN;
-    intervalButtonTheme.unclickableColor = Color.GRAY;
-    intervalButtonTheme.hoverColor = ColorUtils.blendARGB(intervalButtonTheme.clickableColor, Color.BLACK, 0.3f);
+    UITheme.IntervalButtonColor intervalButtonColor = new UITheme.IntervalButtonColor();
+    intervalButtonColor.notGuessedColor = Color.GREEN;
+    intervalButtonColor.guessedColor = Color.GRAY;
+    intervalButtonColor.lockedColor = ColorUtils.blendARGB(Color.GRAY, Color.BLACK, 0.5f);
+    intervalButtonColor.hoverColor = ColorUtils.blendARGB(intervalButtonColor.notGuessedColor, Color.BLACK, 0.3f);
 
     UITheme theme = new UITheme();
-    theme.intervalButton = intervalButtonTheme;
+    theme.intervalButton = intervalButtonColor;
 
     result.theme = theme;
 
@@ -259,22 +273,55 @@ public class MainActivity extends AppCompatActivity {
     };
     result.intervalNames = intervalNames;
 
-    {
-      TextView display = new TextView(this);
-      display.setTextSize(32);
-      //display.setBackgroundColor(Color.RED);
-      result.display = display;
+    int numberOfIntervalStates = intervalNames.length;
+    IntervalButtonState[] states = new IntervalButtonState[numberOfIntervalStates];
+    for (int i = 0; i < states.length; i++) {
+      states[i] = IntervalButtonState.notGuessed;
+    }
+    //states[0] = IntervalButtonState.locked; // @TODO: remove
+    result.intervalButtonStates = states;
 
-      RelativeLayout.LayoutParams displayLayout = new RelativeLayout.LayoutParams(
-          ViewGroup.LayoutParams.MATCH_PARENT,
+    {
+
+      TextView display = new TextView(this);
+      display.setId(View.generateViewId());
+
+      int sizePx = UIUtil.dp(this, 8);
+      display.setTextSize(sizePx);
+      //display.setBackgroundColor(Color.RED);
+      result.scoreDisplay = display;
+
+      RelativeLayout.LayoutParams layout = new RelativeLayout.LayoutParams(
+          ViewGroup.LayoutParams.WRAP_CONTENT,
           ViewGroup.LayoutParams.WRAP_CONTENT
       );
-      displayLayout.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-      container.addView(display, displayLayout);
+      layout.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+      layout.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
+      container.addView(display, layout);
+    }
+
+    {
+      ImageView replayView = new ImageView(this);
+      replayView.setId(View.generateViewId());
+      //replayView.setAdjustViewBounds(true);
+      //replayView.setScaleType(ImageView.ScaleType.FIT_XY);
+      replayView.setImageResource(R.drawable.play_circle);
+      int sizePx = UIUtil.dp(this, 160);
+      RelativeLayout.LayoutParams layout = new RelativeLayout.LayoutParams(
+          sizePx, sizePx
+      );
+      int marginPx = dp(this, 24);
+      layout.setMargins(marginPx, marginPx, marginPx, marginPx);
+      layout.addRule(RelativeLayout.BELOW, result.scoreDisplay.getId());
+      layout.addRule(RelativeLayout.CENTER_HORIZONTAL);
+      container.addView(replayView, layout);
+
+      result.replayIcon = replayView;
     }
 
     {
       TableLayout table = new TableLayout(this);
+      table.setId(View.generateViewId());
       //table.setBackgroundColor(Color.BLUE);
       RelativeLayout.LayoutParams tableLayout = new RelativeLayout.LayoutParams(
           ViewGroup.LayoutParams.MATCH_PARENT,
@@ -293,7 +340,7 @@ public class MainActivity extends AppCompatActivity {
       List<Button> buttons = new ArrayList<>();
 
       int buttonMarginPx = dp(this, 2);
-      int buttonPaddingPx = dp(this, 24);
+      int buttonPaddingPx = dp(this, 18);
 
       buttonParam.setMargins(buttonMarginPx, buttonMarginPx, buttonMarginPx, buttonMarginPx);
 
@@ -309,12 +356,29 @@ public class MainActivity extends AppCompatActivity {
             row.addView(emptyField, buttonParam);
           } else {
             Button2 button = new Button2(this);
+            button.setCornerRadius(8f);
+            button.setBackgroundColor(getIntervalBottomColor(states[interval], theme));
             button.setPadding(buttonPaddingPx, buttonPaddingPx, buttonPaddingPx, buttonPaddingPx);
-            button.applyTheme(intervalButtonTheme);
-            button.setSimpleOnTouchListener(new SimpleTouchListener() {
+            button.setOnTouchListener(new SimpleTouchListener() {
+
+              @Override
+              public void onDownTouchAction() {
+                if (states[interval] != IntervalButtonState.notGuessed) return;
+                button.setBackgroundColor(theme.intervalButton.hoverColor);
+              }
+
               @Override
               public void onUpTouchAction() {
                 buttonOnClickListener.onClick(button, interval);
+
+                int color = getIntervalBottomColor(states[interval], theme);
+                button.setBackgroundColor(color);
+              }
+
+              @Override
+              public void onCancelTouchAction() {
+                int color = getIntervalBottomColor(states[interval], theme);
+                button.setBackgroundColor(color);
               }
             });
 
@@ -329,15 +393,21 @@ public class MainActivity extends AppCompatActivity {
 
       result.intervalButtons = buttons;
     }
-
-    int numberOfIntervalStates = intervalNames.length;
-    IntervalButtonState[] states = new IntervalButtonState[numberOfIntervalStates];
-    for (int i = 0; i < states.length; i++) {
-      states[i] = IntervalButtonState.notGuessed;
-    }
-    result.intervalButtonStates = states;
-
     return result;
+  }
+
+  static private int getIntervalBottomColor(IntervalButtonState state, UITheme theme) {
+    switch (state) {
+      case notGuessed:
+        return theme.intervalButton.notGuessedColor;
+      case guessed:
+        return theme.intervalButton.guessedColor;
+      case locked:
+        return theme.intervalButton.lockedColor;
+      default:
+        String error = String.format("unexpected interval button state: %s.", state);
+        throw new IllegalStateException(error);
+    }
   }
 
   static private IntervalButtonState resetIntervalButtonState(IntervalButtonState state) {
@@ -368,8 +438,8 @@ public class MainActivity extends AppCompatActivity {
       IntervalButtonState state = states[i];
       Button button = buttons.get(i);
 
-      boolean clickable = isIntervalButtonClickable(state);
-      button.setClickable(clickable);
+      int color = getIntervalBottomColor(state, uiState.theme);
+      button.setBackgroundColor(color);
     }
   }
 
